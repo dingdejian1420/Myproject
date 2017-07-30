@@ -42,6 +42,7 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 }
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
+
 END_MESSAGE_MAP()
 
 
@@ -53,6 +54,8 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(CCAN_ToolDlg::IDD, pParent)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+
+
 
 	m_CANDevType = VCI_USBCAN_2E_U;
 	m_CANDevIndex = 0;
@@ -71,6 +74,8 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 void CCAN_ToolDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+
+	DDX_Control(pDX, IDC_LIST_REV_DIS, m_ListBoxDis);
 }
 
 BEGIN_MESSAGE_MAP(CCAN_ToolDlg, CDialogEx)
@@ -120,6 +125,25 @@ BOOL CCAN_ToolDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 
 	// TODO:  在此添加额外的初始化代码
+
+	DWORD dwSytle = ::GetWindowLong(m_ListBoxDis.m_hWnd, GWL_STYLE);// 设置为报表形式
+	SetWindowLong(m_ListBoxDis.m_hWnd, GWL_STYLE, dwSytle | LVS_REPORT);
+	DWORD ExStyle = m_ListBoxDis.GetExtendedStyle();// 设置为报表形式	
+	m_ListBoxDis.SetExtendedStyle(ExStyle|LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);// 初始化列表控件
+
+	m_ListBoxDis.InsertColumn(0, "时间", LVCFMT_CENTER, 45, 0);
+	m_ListBoxDis.InsertColumn(1, "ID", LVCFMT_CENTER, 58, 0);
+	m_ListBoxDis.InsertColumn(2, "帧格式", LVCFMT_CENTER, 58, 0);
+	m_ListBoxDis.InsertColumn(3, "帧类型", LVCFMT_CENTER, 58, 0);
+	m_ListBoxDis.InsertColumn(4, "00", LVCFMT_CENTER, 50, 0);
+	m_ListBoxDis.InsertColumn(5, "01", LVCFMT_CENTER, 50, 0);
+	m_ListBoxDis.InsertColumn(6, "02", LVCFMT_CENTER, 50, 0);
+	m_ListBoxDis.InsertColumn(7, "03", LVCFMT_CENTER, 50, 0);
+	m_ListBoxDis.InsertColumn(8, "04", LVCFMT_CENTER, 50, 0);
+	m_ListBoxDis.InsertColumn(9, "05", LVCFMT_CENTER, 50, 0);
+	m_ListBoxDis.InsertColumn(10, "06", LVCFMT_CENTER, 50, 0);
+	m_ListBoxDis.InsertColumn(11, "07", LVCFMT_CENTER, 50, 0);
+	m_ListBoxDis.InsertColumn(12, "08", LVCFMT_CENTER, 50, 0);
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -308,10 +332,32 @@ void CCAN_ToolDlg::OnBnClickedButtonConnect()
 
 UINT CCAN_ToolDlg::ReceiveThread(void *param)
 {
-	while (1)
+	CCAN_ToolDlg *dlg = (CCAN_ToolDlg*)param;
+	VCI_CAN_OBJ frameinfo[50];
+	VCI_ERR_INFO errinfo;
+	int len = 1;
+	int i = 0;
+
+	while(1)
 	{
-		Sleep(1);
+		Sleep(2);
+		if (dlg->m_Connect == 0) break;
+		len = VCI_Receive(dlg->m_CANDevType, dlg->m_CANDevIndex, dlg->m_CANChannel, frameinfo, 50, 200);
+		if (len <= 0)
+		{
+			//注意：如果没有读到数据则必须调用此函数来读取出当前的错误码，
+			//千万不能省略这一步（即使你可能不想知道错误码是什么）
+			VCI_ReadErrInfo(dlg->m_CANDevType, dlg->m_CANDevIndex, dlg->m_CANChannel, &errinfo);
+		}
+		else
+		{
+			for (i = 0; i<len; i++)
+			{
+
+			}
+		}
 	}
+	return 0;
 }
 
 void CCAN_ToolDlg::OnBnClickedButtonStart()

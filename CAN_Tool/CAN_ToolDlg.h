@@ -17,8 +17,11 @@ public:
 	CWinThread *m_pReceiveThread;
 	CWinThread *m_pLoggingThread;
 
+
 // 对话框数据
 	enum { IDD = IDD_CAN_TOOL_DIALOG };
+
+	CListCtrl m_ListBoxDis;
 
 	DWORD m_CANDevType;
 	DWORD m_CANDevIndex;
@@ -31,7 +34,6 @@ public:
 	DWORD m_FilterMode;
 
 	BOOL m_Connect;
-
 
 
 	protected:
