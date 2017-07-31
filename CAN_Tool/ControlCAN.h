@@ -145,6 +145,13 @@ typedef struct _VCI_FILTER_RECORD{
 }VCI_FILTER_RECORD,*PVCI_FILTER_RECORD;
 
 
+//add by ddj
+typedef  struct  CAN_MessageData{
+	UINT	ID;
+	BYTE	Data[8];
+}VCI_CAN_MSGDATA, *PVCI_CAN_MSGDATA_OBJ;
+
+
 #define EXTERNC		extern "C"
 
 EXTERNC DWORD __stdcall VCI_OpenDevice(DWORD DeviceType,DWORD DeviceInd,DWORD Reserved);

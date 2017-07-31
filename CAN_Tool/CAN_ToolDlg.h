@@ -7,6 +7,8 @@
 #include "DialogCANCFG.h"
 #include "DialogLOGCFG.h"
 
+
+#define WM_THREAD_STOP 0x0427   //自定义一个消息，也可以用系统定义的如WM_QUIT
 // CCAN_ToolDlg 对话框
 class CCAN_ToolDlg : public CDialogEx
 {
@@ -17,11 +19,8 @@ public:
 	CWinThread *m_pReceiveThread;
 	CWinThread *m_pLoggingThread;
 
-
 // 对话框数据
 	enum { IDD = IDD_CAN_TOOL_DIALOG };
-
-	CListCtrl m_ListBoxDis;
 
 	DWORD m_CANDevType;
 	DWORD m_CANDevIndex;
@@ -35,6 +34,9 @@ public:
 
 	BOOL m_Connect;
 
+	CListCtrl m_ListRevDis;
+
+	CString  m_LogFilePath;
 
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
@@ -61,5 +63,6 @@ public:
 	afx_msg void OnBnClickedButtonReset();
 
 	static UINT ReceiveThread(void *param);
+	static UINT LoggingThread(void *param);
 
 };

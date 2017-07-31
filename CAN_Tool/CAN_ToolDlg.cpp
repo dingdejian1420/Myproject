@@ -13,7 +13,17 @@
 #define new DEBUG_NEW
 #endif
 
+const DWORD GCanBrTab[10] = {
+	0x060003, 0x060004, 0x060007,
+	0x1C0008, 0x1C0011, 0x160023,
+	0x1C002C, 0x1600B3, 0x1C00E0,
+	0x1C01C1
+};
 
+
+#define SampleNum  10
+VCI_CAN_MSGDATA CanObj[SampleNum];
+int SampleCount;
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
 
 class CAboutDlg : public CDialogEx
@@ -42,7 +52,6 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 }
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
-
 END_MESSAGE_MAP()
 
 
@@ -55,18 +64,66 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 
+	CString strDevType;
+	CString strDevIndex;
+	CString strCANChannel;
+	CString strWorkMode;
+	CString strFilterType;
+	CString strBuard;
+	CString strLogFilePath;
+
+	CFileFind finder;   //查找是否存在ini文件，若不存在，则生成一个新的默认设置的ini文件，这样就保证了我们更改后的设置每次都可用  
+	BOOL ifFind = finder.FindFile(("CANparaSet.cfg"));
+	if (ifFind)
+	{
+		//::WritePrivateProfileStringW(_T("Database connection Info"), _T("IP"), _T("10.210.0.9"), _T("d:\\RoadDataManagerApp.ini"));
+		//::WritePrivateProfileStringW(_T("Database connection Info"), _T("Database"), _T("RoadNetData"), _T("d:\\RoadDataManagerApp.ini"));
+		//::WritePrivateProfileStringW(_T("Database connection Info"), _T("UID"), _T("sa"), _T("d:\\RoadDataManagerApp.ini"));
+		//::WritePrivateProfileStringW(_T("Database connection Info"), _T("PWD"), _T("4814278"), _T("d:\\RoadDataManagerApp.ini"));
+		::GetPrivateProfileString(("CAN Config value"), ("Type"), ("没找到Type信息"), strDevType.GetBuffer(10), 10, (".//CANparaSet.cfg"));
+		::GetPrivateProfileString(("CAN Config value"), ("Index"), ("没找到Index信息"), strDevIndex.GetBuffer(10), 10, (".//CANparaSet.cfg"));
+		::GetPrivateProfileString(("CAN Config value"), ("Channel"), ("没找到Channel信息"), strCANChannel.GetBuffer(10), 10, (".//CANparaSet.cfg"));
+		::GetPrivateProfileString(("CAN Config value"), ("Buard"), ("没找到Buard信息"), strBuard.GetBuffer(10), 10, (".//CANparaSet.cfg"));
+		::GetPrivateProfileString(("CAN Config value"), ("FilteMode"), ("没找到FilteMode信息"), strFilterType.GetBuffer(10), 10, (".//CANparaSet.cfg"));
+		::GetPrivateProfileString(("CAN Config value"), ("WorkMode"), ("没找到WorkMode信息"), strWorkMode.GetBuffer(10), 10, (".//CANparaSet.cfg"));
+		::GetPrivateProfileString(("CAN Config value"), ("LogFilePath"), ("没找到LogFilePath信息"), strLogFilePath.GetBuffer(100), 100, (".//CANparaSet.cfg"));
+
+		m_CANDevType = atoi(strDevType);
+		m_CANDevIndex = atoi(strDevIndex);
+		m_CANChannel = atoi(strCANChannel);
+
+		m_CANBuard = GCanBrTab[atoi(strBuard)];//500kbp
+
+		m_LogFilePath = strLogFilePath;
+
+		m_sendTimeout = 100;
+
+		m_WorkMode = atoi(strWorkMode);//0： 正常模式 1：只听模式
+		m_FilterMode = atoi(strFilterType);//0: 标准帧滤波 1:扩展帧滤波 2:禁止滤波
 
 
-	m_CANDevType = VCI_USBCAN_2E_U;
-	m_CANDevIndex = 0;
-	m_CANChannel = 0;
+	}
+	else
+	{
+		m_CANDevType = VCI_USBCAN_2E_U;
+		m_CANDevIndex = 0;
+		m_CANChannel = 0;
 
-	m_CANBuard = 500;
-	m_sendTimeout = 100;
+		m_CANBuard = GCanBrTab[2];//500kbp
+		m_sendTimeout = 100;
 
-	m_WorkMode = 1;
-	m_FilterMode = 1;
+		m_WorkMode = 0;//0： 正常模式 1：只听模式
+		m_FilterMode = 0;//0: 标准帧滤波 1:扩展帧滤波 2:禁止滤波
 
+		::WritePrivateProfileString(("CAN Config value"), ("Type"), ("21"), (".//CANparaSet.cfg"));
+		::WritePrivateProfileString(("CAN Config value"), ("Index"), ("0"), (".//CANparaSet.cfg"));
+		::WritePrivateProfileString(("CAN Config value"), ("Channel"),("0"), (".//CANparaSet.cfg"));
+		::WritePrivateProfileString(("CAN Config value"), ("Buard"), ("2"), (".//CANparaSet.cfg"));
+		::WritePrivateProfileString(("CAN Config value"), ("FilteMode"), ("2"), (".//CANparaSet.cfg"));
+		::WritePrivateProfileString(("CAN Config value"), ("WorkMode"), ("0"), (".//CANparaSet.cfg"));
+		::WritePrivateProfileString(("CAN Config value"), ("LogFilePath"), (""), (".//CANparaSet.cfg"));
+
+	}
 
 	m_Connect = FALSE;
 }
@@ -74,8 +131,7 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 void CCAN_ToolDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
-
-	DDX_Control(pDX, IDC_LIST_REV_DIS, m_ListBoxDis);
+	DDX_Control(pDX, IDC_LIST_REV_DIS, m_ListRevDis);
 }
 
 BEGIN_MESSAGE_MAP(CCAN_ToolDlg, CDialogEx)
@@ -126,24 +182,31 @@ BOOL CCAN_ToolDlg::OnInitDialog()
 
 	// TODO:  在此添加额外的初始化代码
 
-	DWORD dwSytle = ::GetWindowLong(m_ListBoxDis.m_hWnd, GWL_STYLE);// 设置为报表形式
-	SetWindowLong(m_ListBoxDis.m_hWnd, GWL_STYLE, dwSytle | LVS_REPORT);
-	DWORD ExStyle = m_ListBoxDis.GetExtendedStyle();// 设置为报表形式	
-	m_ListBoxDis.SetExtendedStyle(ExStyle|LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);// 初始化列表控件
+	LONG lStyle;
+	lStyle = GetWindowLong(m_ListRevDis.m_hWnd, GWL_STYLE);//获取当前窗口style
+	lStyle &= ~LVS_TYPEMASK; //清除显示方式位
+	lStyle |= LVS_REPORT; //设置style
+	SetWindowLong(m_ListRevDis.m_hWnd, GWL_STYLE, lStyle);//设置style
 
-	m_ListBoxDis.InsertColumn(0, "时间", LVCFMT_CENTER, 45, 0);
-	m_ListBoxDis.InsertColumn(1, "ID", LVCFMT_CENTER, 58, 0);
-	m_ListBoxDis.InsertColumn(2, "帧格式", LVCFMT_CENTER, 58, 0);
-	m_ListBoxDis.InsertColumn(3, "帧类型", LVCFMT_CENTER, 58, 0);
-	m_ListBoxDis.InsertColumn(4, "00", LVCFMT_CENTER, 50, 0);
-	m_ListBoxDis.InsertColumn(5, "01", LVCFMT_CENTER, 50, 0);
-	m_ListBoxDis.InsertColumn(6, "02", LVCFMT_CENTER, 50, 0);
-	m_ListBoxDis.InsertColumn(7, "03", LVCFMT_CENTER, 50, 0);
-	m_ListBoxDis.InsertColumn(8, "04", LVCFMT_CENTER, 50, 0);
-	m_ListBoxDis.InsertColumn(9, "05", LVCFMT_CENTER, 50, 0);
-	m_ListBoxDis.InsertColumn(10, "06", LVCFMT_CENTER, 50, 0);
-	m_ListBoxDis.InsertColumn(11, "07", LVCFMT_CENTER, 50, 0);
-	m_ListBoxDis.InsertColumn(12, "08", LVCFMT_CENTER, 50, 0);
+	DWORD dwStyle = m_ListRevDis.GetExtendedStyle();
+	dwStyle |= LVS_EX_FULLROWSELECT;//选中某行使整行高亮（只适用与report风格的listctrl）
+	dwStyle |= LVS_EX_GRIDLINES;//网格线（只适用与report风格的listctrl）
+	dwStyle |= LVS_EX_CHECKBOXES;//item前生成checkbox控件
+	m_ListRevDis.SetExtendedStyle(dwStyle); //设置扩展风格
+
+	m_ListRevDis.InsertColumn(0, "时间", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(1, "ID", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(2, "帧格式", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(3, "帧类型", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(4, "00", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(5, "01", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(6, "02", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(7, "03", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(8, "04", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(9, "05", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(10, "06", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(11, "07", LVCFMT_CENTER, 50);
+
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -251,12 +314,19 @@ void CCAN_ToolDlg::OnLoggingConfig()
 void CCAN_ToolDlg::OnLoggingStart()
 {
 	// TODO:  在此添加命令处理程序代码
+	m_pLoggingThread = AfxBeginThread(LoggingThread, this);
 }
 
 
 void CCAN_ToolDlg::OnLoggingStop()
 {
 	// TODO:  在此添加命令处理程序代码
+	if (m_pLoggingThread)
+	{
+		//m_pLoggingThread = NULL;
+		::PostThreadMessage(m_pLoggingThread->m_nThreadID, WM_THREAD_STOP, 0, 0);
+	}
+	
 }
 
 
@@ -304,8 +374,8 @@ void CCAN_ToolDlg::OnBnClickedButtonConnect()
 	if (m_FilterMode != 2)
 	{
 		filterRecord.ExtFrame = m_FilterMode;
-		filterRecord.Start = 0;
-		filterRecord.End = 1;
+		filterRecord.Start = 0x352;
+		filterRecord.End = 0x353;
 
 		if (filterRecord.Start>filterRecord.End)
 		{
@@ -333,16 +403,21 @@ void CCAN_ToolDlg::OnBnClickedButtonConnect()
 UINT CCAN_ToolDlg::ReceiveThread(void *param)
 {
 	CCAN_ToolDlg *dlg = (CCAN_ToolDlg*)param;
+	//CListBox *box = (CListBox *)dlg->GetDlgItem(IDC_LIST_REV_DIS);
 	VCI_CAN_OBJ frameinfo[50];
 	VCI_ERR_INFO errinfo;
 	int len = 1;
-	int i = 0;
+	int iPos = 0;
+	int counter=0;
+	CString tmpstr;
 
-	while(1)
+	SampleCount = 0;
+	while (1)
 	{
-		Sleep(2);
-		if (dlg->m_Connect == 0) break;
-		len = VCI_Receive(dlg->m_CANDevType, dlg->m_CANDevIndex, dlg->m_CANChannel, frameinfo, 50, 200);
+		Sleep(10);
+
+		if (dlg->m_Connect == FALSE) break;
+		len = VCI_Receive(dlg->m_CANDevType, dlg->m_CANDevIndex, dlg->m_CANChannel, frameinfo, 50, 500);
 		if (len <= 0)
 		{
 			//注意：如果没有读到数据则必须调用此函数来读取出当前的错误码，
@@ -351,19 +426,77 @@ UINT CCAN_ToolDlg::ReceiveThread(void *param)
 		}
 		else
 		{
-			for (i = 0; i<len; i++)
+			for (int i = 0; i < len; i++)
 			{
+				tmpstr.Format("%d ", counter++);
+				iPos = dlg->m_ListRevDis.InsertItem(counter, tmpstr);     //时间
 
+				tmpstr.Format("%03x ", frameinfo[i].ID);
+				dlg->m_ListRevDis.SetItemText(iPos, 1, tmpstr);  //ID
+				dlg->m_ListRevDis.SetItemText(iPos, 2, frameinfo[i].RemoteFlag == 0 ? "数据帧" : "远程帧"); //帧格式
+				dlg->m_ListRevDis.SetItemText(iPos, 3, frameinfo[i].ExternFlag == 0 ? "标准帧" : "扩展帧"); //帧类型
+				tmpstr.Format("%02x ", frameinfo[i].Data[0]);
+				dlg->m_ListRevDis.SetItemText(iPos, 4, tmpstr); //00
+				tmpstr.Format("%02x ", frameinfo[i].Data[1]);
+				dlg->m_ListRevDis.SetItemText(iPos, 5, tmpstr); //01
+				tmpstr.Format("%02x ", frameinfo[i].Data[2]);
+				dlg->m_ListRevDis.SetItemText(iPos, 6, tmpstr); //02
+				tmpstr.Format("%02x ", frameinfo[i].Data[3]);
+				dlg->m_ListRevDis.SetItemText(iPos, 7, tmpstr); //03
+				tmpstr.Format("%02x ", frameinfo[i].Data[4]);
+				dlg->m_ListRevDis.SetItemText(iPos, 8, tmpstr); //04
+				tmpstr.Format("%02x ", frameinfo[i].Data[5]);
+				dlg->m_ListRevDis.SetItemText(iPos, 9, tmpstr); //05
+				tmpstr.Format("%02x ", frameinfo[i].Data[6]);
+				dlg->m_ListRevDis.SetItemText(iPos, 10, tmpstr);//06
+				tmpstr.Format("%02x ", frameinfo[i].Data[7]);
+				dlg->m_ListRevDis.SetItemText(iPos, 11, tmpstr);//07
+
+
+				//update used for Logging 
+				if (frameinfo[i].ID == 1)
+				{
+					CanObj[1].ID = frameinfo[i].ID;
+					for (int j = 0; j < 8; j++)
+					{
+						CanObj[1].Data[j] = frameinfo[i].Data[j];
+					}
+				}
 			}
+
 		}
+
 	}
 	return 0;
 }
 
+UINT CCAN_ToolDlg::LoggingThread(void *param)
+{
+	MSG msg;   //增加一个MSG的变量msg来接收消息
+	while (1)
+	{
+		Sleep(1000);
+
+
+
+		PeekMessage(&msg, NULL, 0, 0, PM_REMOVE);
+		if (msg.message == WM_THREAD_STOP){     //如果收到终止消息则退出
+			//TODO：放在堆里的变量要在这里手动清理
+			return 0;      //线程正常返回，会释放局部变量等内存资源
+		}
+		else{
+			DispatchMessage(&msg);//字面意思，不解释
+		}
+
+	}
+	return 0;
+}
+
+
 void CCAN_ToolDlg::OnBnClickedButtonStart()
 {
 	// TODO:  在此添加控件通知处理程序代码
-	if (m_Connect == 0)
+	if (m_Connect == FALSE)
 		return;
 	if (VCI_StartCAN(m_CANDevType, m_CANDevIndex, m_CANChannel) == 1)
 	{
