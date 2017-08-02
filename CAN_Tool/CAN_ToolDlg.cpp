@@ -21,8 +21,9 @@ const DWORD GCanBrTab[10] = {
 };
 
 
-#define SampleNum  10
+#define SampleNum  10  //buffer size
 VCI_CAN_MSGDATA CanObj[SampleNum];
+UINT LoggingID[SampleNum];
 int SampleCount;
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
 
@@ -71,6 +72,7 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 	CString strFilterType;
 	CString strBuard;
 	CString strLogFilePath;
+	CString strLogTime;
 
 	CFileFind finder;   //查找是否存在ini文件，若不存在，则生成一个新的默认设置的ini文件，这样就保证了我们更改后的设置每次都可用  
 	BOOL ifFind = finder.FindFile(("CANparaSet.cfg"));
@@ -87,14 +89,18 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 		::GetPrivateProfileString(("CAN Config value"), ("FilteMode"), ("没找到FilteMode信息"), strFilterType.GetBuffer(10), 10, (".//CANparaSet.cfg"));
 		::GetPrivateProfileString(("CAN Config value"), ("WorkMode"), ("没找到WorkMode信息"), strWorkMode.GetBuffer(10), 10, (".//CANparaSet.cfg"));
 		::GetPrivateProfileString(("CAN Config value"), ("LogFilePath"), ("没找到LogFilePath信息"), strLogFilePath.GetBuffer(100), 100, (".//CANparaSet.cfg"));
+		::GetPrivateProfileString(("CAN Config value"), ("LogTime"), ("2000"), strLogTime.GetBuffer(100), 100, (".//CANparaSet.cfg"));
+
 
 		m_CANDevType = atoi(strDevType);
 		m_CANDevIndex = atoi(strDevIndex);
 		m_CANChannel = atoi(strCANChannel);
 
-		m_CANBuard = GCanBrTab[atoi(strBuard)];//500kbp
+		m_BuardIndex = atoi(strBuard);
+		m_CANBuard = GCanBrTab[m_BuardIndex];
 
 		m_LogFilePath = strLogFilePath;
+		m_LogTime = atoi(strLogTime);
 
 		m_sendTimeout = 100;
 
@@ -115,6 +121,7 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 		m_WorkMode = 0;//0： 正常模式 1：只听模式
 		m_FilterMode = 0;//0: 标准帧滤波 1:扩展帧滤波 2:禁止滤波
 
+		m_LogTime = 2000;
 		::WritePrivateProfileString(("CAN Config value"), ("Type"), ("21"), (".//CANparaSet.cfg"));
 		::WritePrivateProfileString(("CAN Config value"), ("Index"), ("0"), (".//CANparaSet.cfg"));
 		::WritePrivateProfileString(("CAN Config value"), ("Channel"),("0"), (".//CANparaSet.cfg"));
@@ -122,9 +129,9 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 		::WritePrivateProfileString(("CAN Config value"), ("FilteMode"), ("2"), (".//CANparaSet.cfg"));
 		::WritePrivateProfileString(("CAN Config value"), ("WorkMode"), ("0"), (".//CANparaSet.cfg"));
 		::WritePrivateProfileString(("CAN Config value"), ("LogFilePath"), (""), (".//CANparaSet.cfg"));
-
+		::WritePrivateProfileString(("CAN Config value"), ("LogTime"), "2000", (".//CANparaSet.cfg"));
 	}
-
+	SampleCount = 0;//just for temp
 	m_Connect = FALSE;
 }
 
@@ -132,6 +139,13 @@ void CCAN_ToolDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_LIST_REV_DIS, m_ListRevDis);
+
+	DDX_Control(pDX, IDC_COMBO_SENDTYPE, m_ComboSendType);
+	DDX_Control(pDX, IDC_COMBO_SENDFRAMETYPE, m_ComboSendFrmType);
+	DDX_Control(pDX, IDC_COMBO_SENDFRAMEFORMAT, m_ComboSendFrmFmt);
+
+	DDX_Text(pDX, IDC_EDIT_SENDFRAMEID, m_EditSendFrmID);
+	DDX_Text(pDX, IDC_EDIT_SENDDATA, m_EditSendData);
 }
 
 BEGIN_MESSAGE_MAP(CCAN_ToolDlg, CDialogEx)
@@ -146,6 +160,8 @@ BEGIN_MESSAGE_MAP(CCAN_ToolDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_CONNECT, &CCAN_ToolDlg::OnBnClickedButtonConnect)
 	ON_BN_CLICKED(IDC_BUTTON_START, &CCAN_ToolDlg::OnBnClickedButtonStart)
 	ON_BN_CLICKED(IDC_BUTTON_RESET, &CCAN_ToolDlg::OnBnClickedButtonReset)
+	ON_BN_CLICKED(IDC_BUTTON_CLEAR, &CCAN_ToolDlg::OnBnClickedButtonClear)
+	ON_BN_CLICKED(IDC_BUTTON_SEND, &CCAN_ToolDlg::OnBnClickedButtonSend)
 END_MESSAGE_MAP()
 
 
@@ -194,7 +210,7 @@ BOOL CCAN_ToolDlg::OnInitDialog()
 	dwStyle |= LVS_EX_CHECKBOXES;//item前生成checkbox控件
 	m_ListRevDis.SetExtendedStyle(dwStyle); //设置扩展风格
 
-	m_ListRevDis.InsertColumn(0, "时间", LVCFMT_CENTER, 50);
+	m_ListRevDis.InsertColumn(0, "时间", LVCFMT_CENTER, 60);
 	m_ListRevDis.InsertColumn(1, "ID", LVCFMT_CENTER, 50);
 	m_ListRevDis.InsertColumn(2, "帧格式", LVCFMT_CENTER, 50);
 	m_ListRevDis.InsertColumn(3, "帧类型", LVCFMT_CENTER, 50);
@@ -207,6 +223,20 @@ BOOL CCAN_ToolDlg::OnInitDialog()
 	m_ListRevDis.InsertColumn(10, "06", LVCFMT_CENTER, 50);
 	m_ListRevDis.InsertColumn(11, "07", LVCFMT_CENTER, 50);
 
+	m_ComboSendType.AddString("正常");
+	m_ComboSendType.AddString("单次");
+	m_ComboSendType.AddString("自发自收");
+	m_ComboSendType.AddString("单次自发收");
+
+	m_ComboSendFrmType.AddString("扩展帧");
+	m_ComboSendFrmType.AddString("标准帧");
+
+	m_ComboSendFrmFmt.AddString("数据帧");
+	m_ComboSendFrmFmt.AddString("远程帧");
+
+	m_ComboSendType.SetCurSel(2);
+	m_ComboSendFrmType.SetCurSel(1);
+	m_ComboSendFrmFmt.SetCurSel(0);
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -266,7 +296,6 @@ void CCAN_ToolDlg::OnBnClickedOk()
 {
 	// TODO:  在此添加控件通知处理程序代码
 
-	VCI_OpenDevice(1,1,1);
 	CDialogEx::OnOK();
 }
 
@@ -337,12 +366,6 @@ void CCAN_ToolDlg::OnBnClickedButtonConnect()
 	{
 		m_Connect = FALSE;
 		Sleep(500);
-		//GetDlgItem(IDC_EDIT_BTR)->EnableWindow(!m_connect);
-		//GetDlgItem(IDC_EDIT_STARTID)->EnableWindow(!m_connect);
-		//GetDlgItem(IDC_EDIT_ENDID)->EnableWindow(!m_connect);
-		//GetDlgItem(IDC_COMBO_BAUD)->EnableWindow(!m_connect);
-		//GetDlgItem(IDC_COMBO_FILTER)->EnableWindow(!m_connect);
-		//GetDlgItem(IDC_COMBO_MODE)->EnableWindow(!m_connect);
 		GetDlgItem(IDC_BUTTON_CONNECT)->SetWindowText("连接");
 		VCI_CloseDevice(m_CANDevType, m_CANDevIndex);
 		return;
@@ -403,18 +426,19 @@ void CCAN_ToolDlg::OnBnClickedButtonConnect()
 UINT CCAN_ToolDlg::ReceiveThread(void *param)
 {
 	CCAN_ToolDlg *dlg = (CCAN_ToolDlg*)param;
-	//CListBox *box = (CListBox *)dlg->GetDlgItem(IDC_LIST_REV_DIS);
 	VCI_CAN_OBJ frameinfo[50];
 	VCI_ERR_INFO errinfo;
 	int len = 1;
 	int iPos = 0;
 	int counter=0;
 	CString tmpstr;
+	
 
 	SampleCount = 0;
 	while (1)
 	{
 		Sleep(10);
+
 
 		if (dlg->m_Connect == FALSE) break;
 		len = VCI_Receive(dlg->m_CANDevType, dlg->m_CANDevIndex, dlg->m_CANChannel, frameinfo, 50, 500);
@@ -452,16 +476,20 @@ UINT CCAN_ToolDlg::ReceiveThread(void *param)
 				tmpstr.Format("%02x ", frameinfo[i].Data[7]);
 				dlg->m_ListRevDis.SetItemText(iPos, 11, tmpstr);//07
 
-
-				//update used for Logging 
-				if (frameinfo[i].ID == 1)
+				//遇到最新的则更新数据
+				for (int j = 0; j < SampleCount; j++)
 				{
-					CanObj[1].ID = frameinfo[i].ID;
-					for (int j = 0; j < 8; j++)
+					//update used for Logging 
+					if (frameinfo[i].ID == LoggingID[j])
 					{
-						CanObj[1].Data[j] = frameinfo[i].Data[j];
+						CanObj[j].ID = frameinfo[i].ID;
+						for (int k = 0; k < 8; k++)
+						{
+							CanObj[j].Data[k] = frameinfo[i].Data[k];
+						}
 					}
 				}
+
 			}
 
 		}
@@ -472,16 +500,61 @@ UINT CCAN_ToolDlg::ReceiveThread(void *param)
 
 UINT CCAN_ToolDlg::LoggingThread(void *param)
 {
+	CCAN_ToolDlg *dlg = (CCAN_ToolDlg*)param;
 	MSG msg;   //增加一个MSG的变量msg来接收消息
-	while (1)
+	CStdioFile file;
+	CString strTime,tempstr, strfull;
+	SYSTEMTIME st;
+	CStatic *log = (CStatic *)dlg->GetDlgItem(IDC_STATIC_LOGGING);
+	BOOL bo_RunFlag = 0;
+	while (1)     
 	{
-		Sleep(1000);
+		if (bo_RunFlag == 0)
+		{
+			bo_RunFlag = 1;
+			log->SetWindowTextA("");
+		}
+		else
+		{
+			bo_RunFlag = 0;
+			log->SetWindowTextA("Logging...");
+		}
+		log->ShowWindow(1); //0 为不可见
+		Sleep(dlg->m_LogTime);
 
+		if (file.Open(dlg->m_LogFilePath, CFile::modeWrite))
+		{
+			//file.SeekToBegin();
+			file.SeekToEnd();
+			for (int i = 0; i < SampleCount; i++)
+			{
+				GetLocalTime(&st);
+				strTime.Format("%02d:%02d:%02d	", st.wHour, st.wMinute, st.wSecond);
+				strfull = strTime;
+				tempstr.Format("%x	", CanObj[i].ID);
+				strfull += tempstr;
+				for (int j = 0; j < 8; j++)
+				{
+					tempstr.Format("%02x	", CanObj[i].Data[j]);
+					strfull += tempstr;
+				}
+				strfull += "\n";
 
+				file.WriteString(strfull);
+				file.Flush();
+			}
+			file.Close();
+		}
+		else
+		{
+			return 0;
+		}
 
 		PeekMessage(&msg, NULL, 0, 0, PM_REMOVE);
 		if (msg.message == WM_THREAD_STOP){     //如果收到终止消息则退出
 			//TODO：放在堆里的变量要在这里手动清理
+			log->SetWindowTextA("Logging");
+			log->ShowWindow(1); //0 为不可见
 			return 0;      //线程正常返回，会释放局部变量等内存资源
 		}
 		else{
@@ -489,6 +562,7 @@ UINT CCAN_ToolDlg::LoggingThread(void *param)
 		}
 
 	}
+
 	return 0;
 }
 
@@ -527,4 +601,146 @@ void CCAN_ToolDlg::OnBnClickedButtonReset()
 		str = "复位失败";
 		MessageBox(str);
 	}
+}
+
+
+void CCAN_ToolDlg::OnBnClickedButtonClear()
+{
+	// TODO:  在此添加控件通知处理程序代码
+	m_ListRevDis.DeleteAllItems();
+}
+
+
+void CCAN_ToolDlg::OnBnClickedButtonSend()
+{
+	// TODO:  在此添加控件通知处理程序代码
+	if (m_Connect == 0)
+		return;
+	VCI_CAN_OBJ frameinfo;
+
+	char szFrameID[9];
+	unsigned char FrameID[4] = { 0, 0, 0, 0 };
+	memset(szFrameID, '0', 9);
+	unsigned char Data[8];
+	char szData[25];
+	BYTE datalen = 0;
+
+	UpdateData(true);
+	if (m_EditSendFrmID.GetLength() == 0 ||
+		(m_EditSendData.GetLength() == 0 && m_ComboSendFrmType.GetCurSel() == 0))
+	{
+		MessageBox("请输入数据");
+		return;
+	}
+	if (m_EditSendFrmID.GetLength()>8)
+	{
+		MessageBox("ID值超过范围");
+		return;
+	}
+	if (m_EditSendData.GetLength()>24)
+	{
+		MessageBox("数据长度超过范围,最大为8个字节");
+		return;
+	}
+	if (m_ComboSendFrmType.GetCurSel() == 0)
+	{
+		if (m_EditSendData.GetLength() % 3 == 1)
+		{
+			MessageBox("数据格式不对,请重新输入");
+			return;
+		}
+	}
+	memcpy(&szFrameID[8 - m_EditSendFrmID.GetLength()], (LPCTSTR)m_EditSendFrmID, m_EditSendFrmID.GetLength());
+	strtodata((unsigned char*)szFrameID, FrameID, 4, 0);
+
+	datalen = (m_EditSendData.GetLength() + 1) / 3;
+	strcpy_s(szData, (LPCTSTR)m_EditSendData);
+	strtodata((unsigned char*)szData, Data, datalen, 1);
+
+
+	UpdateData(false);
+
+	frameinfo.DataLen = datalen;
+	memcpy(&frameinfo.Data, Data, datalen);
+
+	frameinfo.RemoteFlag = m_ComboSendFrmFmt.GetCurSel();
+	frameinfo.ExternFlag = m_ComboSendFrmType.GetCurSel();
+	frameinfo.SendType = m_ComboSendType.GetCurSel();
+
+	if (frameinfo.ExternFlag == 1)
+	{
+		frameinfo.ID = ((DWORD)FrameID[0] << 24) + ((DWORD)FrameID[1] << 16) + ((DWORD)FrameID[2] << 8) +
+			((DWORD)FrameID[3]);
+	}
+	else
+	{
+		frameinfo.ID = ((DWORD)FrameID[2] << 8) + ((DWORD)FrameID[3]);
+	}
+
+	VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 4, &m_sendTimeout);//设置发送超时
+
+	int ret = VCI_Transmit(m_CANDevType, m_CANDevIndex, m_CANChannel, &frameinfo, 1);
+	if (ret == 1)
+	{
+	}
+	else
+	{
+		MessageBox("写入失败");
+	}
+}
+
+
+//-----------------------------------------------------
+//参数：
+//str：要转换的字符串
+//data：储存转换过来的数据串
+//len:数据长度
+//函数功能：字符串转换为数据串
+//-----------------------------------------------------
+int CCAN_ToolDlg::strtodata(unsigned char *str, unsigned char *data, int len, int flag)
+{
+	unsigned char cTmp = 0;
+	int i = 0;
+	for (int j = 0; j<len; j++)
+	{
+		if (chartoint(str[i++], &cTmp))
+			return 1;
+		data[j] = cTmp;
+		if (chartoint(str[i++], &cTmp))
+			return 1;
+		data[j] = (data[j] << 4) + cTmp;
+		if (flag == 1)
+			i++;
+	}
+	return 0;
+}
+
+//-----------------------------------------------------
+//参数：
+//chr：要转换的字符
+//cint：储存转换过来的数据
+//函数功能：字符转换为数据
+//-----------------------------------------------------
+int CCAN_ToolDlg::chartoint(unsigned char chr, unsigned char *cint)
+{
+	unsigned char cTmp;
+	cTmp = chr - 48;
+	if (cTmp >= 0 && cTmp <= 9)
+	{
+		*cint = cTmp;
+		return 0;
+	}
+	cTmp = chr - 65;
+	if (cTmp >= 0 && cTmp <= 5)
+	{
+		*cint = (cTmp + 10);
+		return 0;
+	}
+	cTmp = chr - 97;
+	if (cTmp >= 0 && cTmp <= 5)
+	{
+		*cint = (cTmp + 10);
+		return 0;
+	}
+	return 1;
 }

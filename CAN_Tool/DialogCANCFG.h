@@ -34,4 +34,6 @@ public:
 	afx_msg void OnCbnSelchangeComboCanbuard();
 	afx_msg void OnCbnSelchangeComboFiltertype();
 	virtual BOOL OnInitDialog();
+	afx_msg void OnCbnSelchangeComboWorkmode();
+	afx_msg void OnBnClickedOk();
 };

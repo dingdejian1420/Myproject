@@ -1,0 +1,20 @@
+###########################################################################
+# GLOBAL git ignore file
+###########################################################################
+# for generated files put a .gitignore into the place of the generator
+
+########################## General #################################
+*.sdf
+*.v12.suo
+*.exe
+*.ilk
+*.obj
+*.pdb
+*.idb
+*.pdb
+
+*.[sdf]
+*.[v12.suo]
+CAN_Tool/debug/
+CAN_Tool/ipch/
+

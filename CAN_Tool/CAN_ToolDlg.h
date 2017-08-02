@@ -27,6 +27,8 @@ public:
 	DWORD m_CANChannel;
 
 	DWORD m_CANBuard;
+	int m_BuardIndex;
+
 	DWORD m_sendTimeout;
 
 	UCHAR m_WorkMode;
@@ -37,6 +39,14 @@ public:
 	CListCtrl m_ListRevDis;
 
 	CString  m_LogFilePath;
+
+	int m_LogTime;
+	/**********************∑¢ÀÕ≈‰÷√*************************/
+	CComboBox	m_ComboSendType;
+	CComboBox	m_ComboSendFrmType;
+	CComboBox	m_ComboSendFrmFmt;
+	CString	    m_EditSendFrmID;
+	CString	    m_EditSendData;
 
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV ÷ß≥÷
@@ -65,4 +75,9 @@ public:
 	static UINT ReceiveThread(void *param);
 	static UINT LoggingThread(void *param);
 
+	afx_msg void OnBnClickedButtonClear();
+	afx_msg void OnBnClickedButtonSend();
+
+	int strtodata(unsigned char *str, unsigned char *data, int len, int flag);
+	int chartoint(unsigned char chr, unsigned char *cint);
 };
