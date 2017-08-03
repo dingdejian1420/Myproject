@@ -13,7 +13,6 @@
 *.idb
 *.pdb
 
-*.[sdf]
 *.[v12.suo]
 CAN_Tool/debug/
 CAN_Tool/ipch/

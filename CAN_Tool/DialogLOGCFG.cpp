@@ -132,7 +132,7 @@ void CDialogLOGCFG::OnBnClickedButtonDellog()
 
 void CDialogLOGCFG::OnBnClickedLogsave()
 {
-	CString tempstr;
+	CString tempstr, logtempstr;
 	// TODO:  在此添加控件通知处理程序代码
 
 	CCAN_ToolDlg *dlg;
@@ -147,6 +147,9 @@ void CDialogLOGCFG::OnBnClickedLogsave()
 	{
 		tempstr = m_ListLogIDInfo.GetItemText(i, 0);;
 		LoggingID[i] = strtol(tempstr, NULL, 16);  //保存到全局变量
+
+		tempstr += " ";
+		logtempstr += tempstr;
 	}
 
 
@@ -154,6 +157,7 @@ void CDialogLOGCFG::OnBnClickedLogsave()
 
 	::WritePrivateProfileString(("CAN Config value"), ("LogFilePath"), m_FilePath, (".//CANparaSet.cfg"));
 	::WritePrivateProfileString(("CAN Config value"), ("LogTime"), m_Time, (".//CANparaSet.cfg"));
+	::WritePrivateProfileString(("CAN Config value"), ("LogMsgID"), logtempstr, (".//CANparaSet.cfg"));
 }
 
 
