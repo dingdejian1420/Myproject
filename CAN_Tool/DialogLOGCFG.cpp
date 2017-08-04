@@ -98,7 +98,13 @@ BOOL CDialogLOGCFG::OnInitDialog()
 	m_ListLogIDInfo.InsertColumn(0, "ID", LVCFMT_CENTER, 50);
 	//m_ListLogIDInfo.InsertColumn(1, "周期", LVCFMT_CENTER, 50);
 
-
+	for (int i = 0; i < SampleCount; i++)
+	{
+		tmpstr.Format("%03x", LoggingID[i]);
+		m_ListLogIDInfo.InsertItem(i, tmpstr);
+	}
+	
+	m_FocuseItem = -1;
 
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常:  OCX 属性页应返回 FALSE
@@ -115,8 +121,8 @@ void CDialogLOGCFG::OnBnClickedButtonAddlog()
 	iPos = m_ListLogIDInfo.InsertItem(SampleCount, temp);//每次添加都是count_points行
 
 	//m_ListLogIDInfo.SetItemText(iPos, 1, m_Time);
-
-
+	m_ID.Empty();
+	UpdateData(false);
 	SampleCount++;
 }
 
@@ -124,9 +130,12 @@ void CDialogLOGCFG::OnBnClickedButtonDellog()
 {
 	// TODO:  在此添加控件通知处理程序代码
 	
-	m_ListLogIDInfo.DeleteItem(m_FocuseItem);
-	m_FocuseItem = -1;
-	SampleCount--;
+	if (m_FocuseItem != -1)
+	{
+		m_ListLogIDInfo.DeleteItem(m_FocuseItem);
+		m_FocuseItem = -1;
+		SampleCount--;
+	}
 }
 
 
@@ -145,7 +154,7 @@ void CDialogLOGCFG::OnBnClickedLogsave()
 
 	for (int i = 0; i < SampleCount; i++)
 	{
-		tempstr = m_ListLogIDInfo.GetItemText(i, 0);;
+		tempstr = m_ListLogIDInfo.GetItemText(i, 0);
 		LoggingID[i] = strtol(tempstr, NULL, 16);  //保存到全局变量
 
 		tempstr += " ";

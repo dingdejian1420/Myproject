@@ -73,7 +73,8 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 	CString strBuard;
 	CString strLogFilePath;
 	CString strLogTime;
-	CString strLogIDs,strLogID;
+	CString strLogIDs;
+	CString strLogID;
 
 	CFileFind finder;   //查找是否存在ini文件，若不存在，则生成一个新的默认设置的ini文件，这样就保证了我们更改后的设置每次都可用  
 	BOOL ifFind = finder.FindFile(("CANparaSet.cfg"));
@@ -93,6 +94,7 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 		::GetPrivateProfileString(("CAN Config value"), ("LogTime"), ("2000"), strLogTime.GetBuffer(100), 100, (".//CANparaSet.cfg"));
 		::GetPrivateProfileString(("CAN Config value"), ("LogMsgID"), ("2000"), strLogIDs.GetBuffer(100), 100, (".//CANparaSet.cfg"));
 
+		strLogIDs.ReleaseBuffer();
 
 		m_CANDevType = atoi(strDevType);
 		m_CANDevIndex = atoi(strDevIndex);
@@ -109,11 +111,20 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 		m_WorkMode = atoi(strWorkMode);//0： 正常模式 1：只听模式
 		m_FilterMode = atoi(strFilterType);//0: 标准帧滤波 1:扩展帧滤波 2:禁止滤波
 
-		//SampleCount = strLogIDs.GetLength();
-		SampleCount=sizeof(strLogIDs.GetString());
+
+		if (strLogIDs.GetLength() < 3)
+		{
+			SampleCount = 0;
+		}
+		else
+		{
+			SampleCount = strLogIDs.GetLength() / 4 + 1;
+		}
+		//SampleCount=sizeof(strLogIDs.GetString());
 		for (int i = 0;( i < SampleCount)&&(SampleCount<SampleNum); i++)
 		{
-			strLogID = strLogIDs.Mid(i * 4, 3);
+			strLogID = strLogIDs.Mid(i*4, 3);
+
 			LoggingID[i] = strtol(strLogID, NULL, 16);
 		}
 
@@ -141,7 +152,7 @@ CCAN_ToolDlg::CCAN_ToolDlg(CWnd* pParent /*=NULL*/)
 		::WritePrivateProfileString(("CAN Config value"), ("LogFilePath"), (""), (".//CANparaSet.cfg"));
 		::WritePrivateProfileString(("CAN Config value"), ("LogTime"), "2000", (".//CANparaSet.cfg"));
 	}
-	SampleCount = 0;//just for temp
+	//SampleCount = 0;//just for temp
 	m_Connect = FALSE;
 }
 
@@ -444,7 +455,7 @@ UINT CCAN_ToolDlg::ReceiveThread(void *param)
 	CString tmpstr;
 	
 
-	SampleCount = 0;
+	//SampleCount = 0;
 	while (1)
 	{
 		Sleep(10);
