@@ -165,6 +165,9 @@ void CCAN_ToolDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_COMBO_SENDFRAMETYPE, m_ComboSendFrmType);
 	DDX_Control(pDX, IDC_COMBO_SENDFRAMEFORMAT, m_ComboSendFrmFmt);
 
+	DDX_Control(pDX, IDC_CHECK_CONTINUE, m_BtnContinueSend);
+	DDX_Control(pDX, IDC_CHECK_DIAMODE, m_BtnDiaMode);
+
 	DDX_Text(pDX, IDC_EDIT_SENDFRAMEID, m_EditSendFrmID);
 	DDX_Text(pDX, IDC_EDIT_SENDDATA, m_EditSendData);
 }
@@ -183,6 +186,8 @@ BEGIN_MESSAGE_MAP(CCAN_ToolDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_RESET, &CCAN_ToolDlg::OnBnClickedButtonReset)
 	ON_BN_CLICKED(IDC_BUTTON_CLEAR, &CCAN_ToolDlg::OnBnClickedButtonClear)
 	ON_BN_CLICKED(IDC_BUTTON_SEND, &CCAN_ToolDlg::OnBnClickedButtonSend)
+	ON_BN_CLICKED(IDC_CHECK1, &CCAN_ToolDlg::OnBnClickedCheck_DIA)
+	ON_BN_CLICKED(IDC_CHECK_CONTINUE, &CCAN_ToolDlg::OnBnClickedCheckContinue)
 END_MESSAGE_MAP()
 
 
@@ -249,14 +254,14 @@ BOOL CCAN_ToolDlg::OnInitDialog()
 	m_ComboSendType.AddString("自发自收");
 	m_ComboSendType.AddString("单次自发收");
 
+	m_ComboSendFrmType.AddString("标准帧"); 
 	m_ComboSendFrmType.AddString("扩展帧");
-	m_ComboSendFrmType.AddString("标准帧");
 
 	m_ComboSendFrmFmt.AddString("数据帧");
 	m_ComboSendFrmFmt.AddString("远程帧");
 
 	m_ComboSendType.SetCurSel(2);
-	m_ComboSendFrmType.SetCurSel(1);
+	m_ComboSendFrmType.SetCurSel(0);
 	m_ComboSendFrmFmt.SetCurSel(0);
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
@@ -418,8 +423,8 @@ void CCAN_ToolDlg::OnBnClickedButtonConnect()
 	if (m_FilterMode != 2)
 	{
 		filterRecord.ExtFrame = m_FilterMode;
-		filterRecord.Start = 0x352;
-		filterRecord.End = 0x353;
+		filterRecord.Start = 0x728;
+		filterRecord.End = 0x7a8;
 
 		if (filterRecord.Start>filterRecord.End)
 		{
@@ -496,6 +501,9 @@ UINT CCAN_ToolDlg::ReceiveThread(void *param)
 				dlg->m_ListRevDis.SetItemText(iPos, 10, tmpstr);//06
 				tmpstr.Format("%02x ", frameinfo[i].Data[7]);
 				dlg->m_ListRevDis.SetItemText(iPos, 11, tmpstr);//07
+
+				int nCount = dlg->m_ListRevDis.GetItemCount();
+				if (nCount > 0) dlg->m_ListRevDis.EnsureVisible(nCount - 1, FALSE);
 
 				//遇到最新的则更新数据
 				for (int j = 0; j < SampleCount; j++)
@@ -634,79 +642,126 @@ void CCAN_ToolDlg::OnBnClickedButtonClear()
 
 void CCAN_ToolDlg::OnBnClickedButtonSend()
 {
+	CString strs, str;
+	int length;
+	int i;
+	UCHAR data[8];
+	VCI_CAN_OBJ frameinfo;
+
 	// TODO:  在此添加控件通知处理程序代码
 	if (m_Connect == 0)
 		return;
-	VCI_CAN_OBJ frameinfo;
+	if (m_BtnDiaMode.GetCheck()==0)
+	{
+		char szFrameID[9];
+		unsigned char FrameID[4] = { 0, 0, 0, 0 };
+		memset(szFrameID, '0', 9);
+		unsigned char Data[8];
+		char szData[25];
+		BYTE datalen = 0;
 
-	char szFrameID[9];
-	unsigned char FrameID[4] = { 0, 0, 0, 0 };
-	memset(szFrameID, '0', 9);
-	unsigned char Data[8];
-	char szData[25];
-	BYTE datalen = 0;
-
-	UpdateData(true);
-	if (m_EditSendFrmID.GetLength() == 0 ||
-		(m_EditSendData.GetLength() == 0 && m_ComboSendFrmType.GetCurSel() == 0))
-	{
-		MessageBox("请输入数据");
-		return;
-	}
-	if (m_EditSendFrmID.GetLength()>8)
-	{
-		MessageBox("ID值超过范围");
-		return;
-	}
-	if (m_EditSendData.GetLength()>24)
-	{
-		MessageBox("数据长度超过范围,最大为8个字节");
-		return;
-	}
-	if (m_ComboSendFrmType.GetCurSel() == 0)
-	{
-		if (m_EditSendData.GetLength() % 3 == 1)
+		UpdateData(true);
+		if (m_EditSendFrmID.GetLength() == 0 ||
+			(m_EditSendData.GetLength() == 0 && m_ComboSendFrmType.GetCurSel() == 0))
 		{
-			MessageBox("数据格式不对,请重新输入");
+			MessageBox("请输入数据");
 			return;
 		}
-	}
-	memcpy(&szFrameID[8 - m_EditSendFrmID.GetLength()], (LPCTSTR)m_EditSendFrmID, m_EditSendFrmID.GetLength());
-	strtodata((unsigned char*)szFrameID, FrameID, 4, 0);
+		if (m_EditSendFrmID.GetLength()>8)
+		{
+			MessageBox("ID值超过范围");
+			return;
+		}
+		if (m_EditSendData.GetLength()>24)
+		{
+			MessageBox("数据长度超过范围,最大为8个字节");
+			return;
+		}
+		if (m_ComboSendFrmType.GetCurSel() == 0)
+		{
+			if (m_EditSendData.GetLength() % 3 == 1)
+			{
+				MessageBox("数据格式不对,请重新输入");
+				return;
+			}
+		}
+		memcpy(&szFrameID[8 - m_EditSendFrmID.GetLength()], (LPCTSTR)m_EditSendFrmID, m_EditSendFrmID.GetLength());
+		strtodata((unsigned char*)szFrameID, FrameID, 4, 0);
 
-	datalen = (m_EditSendData.GetLength() + 1) / 3;
-	strcpy_s(szData, (LPCTSTR)m_EditSendData);
-	strtodata((unsigned char*)szData, Data, datalen, 1);
+		datalen = (m_EditSendData.GetLength() + 1) / 3;
+		strcpy_s(szData, (LPCTSTR)m_EditSendData);
+		strtodata((unsigned char*)szData, Data, datalen, 1);
 
 
-	UpdateData(false);
+		UpdateData(false);
 
-	frameinfo.DataLen = datalen;
-	memcpy(&frameinfo.Data, Data, datalen);
+		frameinfo.DataLen = datalen;
+		memcpy(&frameinfo.Data, Data, datalen);
 
-	frameinfo.RemoteFlag = m_ComboSendFrmFmt.GetCurSel();
-	frameinfo.ExternFlag = m_ComboSendFrmType.GetCurSel();
-	frameinfo.SendType = m_ComboSendType.GetCurSel();
+		frameinfo.RemoteFlag = m_ComboSendFrmFmt.GetCurSel();
+		frameinfo.ExternFlag = m_ComboSendFrmType.GetCurSel();
+		frameinfo.SendType = m_ComboSendType.GetCurSel();
 
-	if (frameinfo.ExternFlag == 1)
-	{
-		frameinfo.ID = ((DWORD)FrameID[0] << 24) + ((DWORD)FrameID[1] << 16) + ((DWORD)FrameID[2] << 8) +
-			((DWORD)FrameID[3]);
+		if (frameinfo.ExternFlag == 1)
+		{
+			frameinfo.ID = ((DWORD)FrameID[0] << 24) + ((DWORD)FrameID[1] << 16) + ((DWORD)FrameID[2] << 8) +
+				((DWORD)FrameID[3]);
+		}
+		else
+		{
+			frameinfo.ID = ((DWORD)FrameID[2] << 8) + ((DWORD)FrameID[3]);
+		}
+
+		VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 4, &m_sendTimeout);//设置发送超时
+
+		int ret = VCI_Transmit(m_CANDevType, m_CANDevIndex, m_CANChannel, &frameinfo, 1);
+		if (ret == 1)
+		{
+		}
+		else
+		{
+			MessageBox("写入失败");
+		}
 	}
 	else
 	{
-		frameinfo.ID = ((DWORD)FrameID[2] << 8) + ((DWORD)FrameID[3]);
-	}
+		frameinfo.ID = 0x728;
+		frameinfo.ExternFlag = 0;
+		frameinfo.RemoteFlag = 0;
+		frameinfo.DataLen = 8;
+		frameinfo.SendType = 2;
 
-	VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 4, &m_sendTimeout);//设置发送超时
+		GetDlgItemText(IDC_EDIT_SENDDATA, strs);
+		for (i = 0; i < 8; i++)
+		{
+			frameinfo.Data[i] = strtol("AA", NULL, 16); //AA
+		}
 
-	int ret = VCI_Transmit(m_CANDevType, m_CANDevIndex, m_CANChannel, &frameinfo, 1);
-	if (ret == 1)
-	{
-	}
-	else
-	{
-		MessageBox("写入失败");
+		frameinfo.Data[0] = (strs.GetLength() + 1) / 3;
+		for (i = 0; i < (strs.GetLength()+1) / 3; i++)
+		{
+			str = strs.Mid(i * 3, 2);
+
+			frameinfo.Data[i+1] = strtol(str, NULL, 16);
+		}
+		
+		VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 4, &m_sendTimeout);//设置发送超时
+
+		i = VCI_Transmit(m_CANDevType, m_CANDevIndex, m_CANChannel, &frameinfo, 1);
+
+		if (frameinfo.Data[1] == strtol("22", NULL, 16))
+		{
+			for (i = 0; i < 8; i++)
+			{
+				frameinfo.Data[i] = 170; //AA
+			}
+			frameinfo.Data[0] = strtol("30", NULL, 16);
+			frameinfo.Data[1] = strtol("00", NULL, 16);
+			frameinfo.Data[2] = strtol("04", NULL, 16);
+			Sleep(10);
+			VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 4, &m_sendTimeout);
+			i = VCI_Transmit(m_CANDevType, m_CANDevIndex, m_CANChannel, &frameinfo, 1);
+		}
 	}
 }
 
@@ -764,4 +819,77 @@ int CCAN_ToolDlg::chartoint(unsigned char chr, unsigned char *cint)
 		return 0;
 	}
 	return 1;
+}
+
+void CCAN_ToolDlg::OnBnClickedCheck_DIA()//诊断模式
+{
+	// TODO:  
+	VCI_FILTER_RECORD filterRecord;
+	int IsCheck = m_BtnDiaMode.GetCheck();
+
+	if (IsCheck == 1)
+	{
+		//if (m_FilterMode != 2)
+		//{
+			m_FilterMode = 0;
+			filterRecord.ExtFrame = m_FilterMode;
+			filterRecord.Start = 0x728;
+			filterRecord.End = 0x7a8;
+
+			VCI_ResetCAN(m_CANDevType, m_CANDevIndex, m_CANChannel);
+			Sleep(500);
+			//填充滤波表格
+			VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 1, &filterRecord);
+			//使滤波表格生效
+			if (VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 2, NULL) != STATUS_OK)
+			{
+				MessageBox(_T("设置滤波失败!"), _T("警告"), MB_OK | MB_ICONQUESTION);
+				//VCI_CloseDevice(m_CANDevType, m_CANDevIndex);
+				m_BtnDiaMode.SetCheck(0);
+				return;
+			}
+			Sleep(500);
+			VCI_StartCAN(m_CANDevType, m_CANDevIndex, m_CANChannel);
+		//}
+		//else
+		//{
+		//	MessageBox("请打卡滤波模式！");
+		//	m_BtnDiaMode.SetCheck(0);
+		//}
+
+	}
+	else//恢复非滤波模式 滤波关
+	{
+		VCI_ResetCAN(m_CANDevType, m_CANDevIndex, m_CANChannel);
+		Sleep(500);
+		m_FilterMode = 2;
+		filterRecord.ExtFrame = m_FilterMode;
+		filterRecord.Start = 0;
+		filterRecord.End = 0;
+		VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 1, &filterRecord);
+		if (VCI_SetReference(m_CANDevType, m_CANDevIndex, m_CANChannel, 2, NULL) != STATUS_OK)
+		{
+			MessageBox("滤波关失败！");
+		}
+		Sleep(500);
+		VCI_StartCAN(m_CANDevType, m_CANDevIndex, m_CANChannel);
+		//VCI_CloseDevice(m_CANDevType, m_CANDevIndex);
+
+		//CCAN_ToolDlg::OnBnClickedButtonConnect();
+
+	}
+}
+
+
+void CCAN_ToolDlg::OnBnClickedCheckContinue()//连续发送
+{
+	// TODO:  在此添加控件通知处理程序代码
+	int IsCheck = m_BtnContinueSend.GetCheck();
+
+	if (IsCheck == 1)
+	{
+	}
+	else
+	{
+	}
 }

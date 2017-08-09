@@ -48,6 +48,9 @@ public:
 	CString	    m_EditSendFrmID;
 	CString	    m_EditSendData;
 
+	CButton  m_BtnDiaMode;
+	CButton  m_BtnContinueSend;
+
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV Ö§³Ö
 
@@ -80,4 +83,6 @@ public:
 
 	int strtodata(unsigned char *str, unsigned char *data, int len, int flag);
 	int chartoint(unsigned char chr, unsigned char *cint);
+	afx_msg void OnBnClickedCheck_DIA();
+	afx_msg void OnBnClickedCheckContinue();
 };
