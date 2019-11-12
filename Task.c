@@ -44,15 +44,15 @@ uint8 Task_GetHighestPrioIndex(void)
 	}
 	else if(Task_u32RdyTable&0xFF00)
 	{
-		u8First1Index=First1MapTbl[(Task_u32RdyTable&0xFF00)>>8]+7;
+		u8First1Index=First1MapTbl[(Task_u32RdyTable&0xFF00)>>8]+8;
 	}
 	else if(Task_u32RdyTable&0xFF0000)
 	{
-		u8First1Index=First1MapTbl[(Task_u32RdyTable&0xFF0000)>>16]+7+8;
+		u8First1Index=First1MapTbl[(Task_u32RdyTable&0xFF0000)>>16]+16;
 	}
 	else if(Task_u32RdyTable&0xFF000000)
 	{
-		u8First1Index=First1MapTbl[(Task_u32RdyTable&0xFF000000)>>24]+7+8+8;
+		u8First1Index=First1MapTbl[(Task_u32RdyTable&0xFF000000)>>24]+24;
 	}
 	else
 	{
